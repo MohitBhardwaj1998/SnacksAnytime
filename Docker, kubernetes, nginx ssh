@@ -1,0 +1,145 @@
+ATOZ
+
+Pre Requirements installing ansible ,git, python3, vim 
+
+sudo yum update -y
+sudo dnf install epel-release -y 
+sudo dnf install ansible -y
+ansible --version
+
+sudo dnf install git -y
+
+sudo yum install python3-pip 
+-----------------------------------
+setting up other vm's for ssh access
+ssh-keygen -t rsa
+ssh-copy-id -i id_rsa root@134.209.248.98
+ssh-copy-id -i id_rsa root@165.232.68.166
+ssh-copy-id -i id_rsa root@165.232.75.82
+
+testing if it worked
+ssh -i id_rsa root@134.209.248.98
+
+------------------------------------
+installing kubernetes using kubespray, setup cluster like master and worker nodes.
+
+
+git clone https://github.com/kubernetes-sigs/kubespray.git
+
+cd kubespray
+
+sudo pip3 install -r requirements.txt
+
+cp -rfp inventory/sample inventory/mycluster
+
+declare -a IPS=(134.209.248.98 165.232.68.166 165.232.75.82)
+
+CONFIG_FILE=inventory/mycluster/hosts.yaml python3 contrib/inventory_builder/inventory.py ${IPS[@]}
+
+vim inventory/mycluster/hosts.yaml //make changes according to your needs of masters and slaves.
+
+vim inventory/mycluster/group_vars/all/all.yml
+
+vim inventory/mycluster/group_vars/k8s-cluster/k8s-cluster.yml
+
+ansible-playbook -i inventory/mycluster/hosts.yaml  --become --become-user=root cluster.yml
+
+cd .ssh 
+ssh -i id_rsa root@masterNodeIp
+kubectl get nodes 
+
+
+Now Get the dashboard/UI for kubernetes
+
+kubectl edit svc/kubernetes-dashboard --namespace=kube-system
+
+in file Press shift+g and replace ClusterIP with NodePort
+
+kubectl get svc --all-namespaces now see for kubernetes-dashboard :PORT
+https://ip:port
+
+Now Generate token for login
+
+vim cluster-admin.yaml
+add below text in file and save by wq!
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-admin
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: cluster-admin
+  namespace: kube-system
+
+kubectl apply -f cluster-admin.yaml
+
+kubectl -n kube-system describe secret $(kubectl -n kube-system get secret | grep cluster-admin | awk '{print $1}')
+
+copy token and access dashboard/UI
+
+--------------------------------------------------------------------------------------------------------------------
+
+Hosting a static website on Nginx
+
+kubectl run nginx-service --image nginx
+docker image list //find nginx IMAGE-ID
+docker run -d -p 8024:80 IMAGE-ID
+docker ps // look for nginx container id
+docker exec -it container_id bash 
+cd //usr/share/nginx/html
+cp index.html old.index.html && rm -rf index.html
+CRTL+D
+now use below command to copy static website content to Nginx 
+docker cp /home/centos/website/. continaer_id:/usr/share/nginx/html       //note that website/. will copy all the content of current dir, you can specify the file for one copy
+
+now restart your container or just simply go to browser add ip:nginx port
+
+
+----------------------------------------------------------------------------------------------------------------------
+install docker 
+
+sudo yum install -y yum-utils
+
+sudo yum-config-manager \
+    --add-repo \
+    https://download.docker.com/linux/centos/docker-ce.repo
+
+sudo yum install docker-ce docker-ce-cli containerd.io --nobest -y
+
+or 
+
+	sudo dnf install docker-ce --nobest
+ sudo service docker status
+ sudo service docker start
+ 
+ or 
+ 
+ yum install -y https://download.docker.com/linux/centos/7/x86_64/stable/Packages/containerd.io-1.2.6-3.3.el7.x86_64.rpm
+yum install docker-ce docker-ce-cli
+
+sudo usermod -aG docker $USER
+-----------------------------------------------------------------------------------------------------------------------
+Installing jenkins,sonarqube,jfrog artifactory, nginx using docker-compose
+
+Pre-requirements  // docker-compose
+
+docker compose
+sudo curl -L "https://github.com/docker/compose/releases/download/1.26.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+
+Now lets begin
+
+ wget https://www.dropbox.com/s/313e7qcbrcmbhsr/FINALIZE.tar.gz?dl=0   or  
+
+
